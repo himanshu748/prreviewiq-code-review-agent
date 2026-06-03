@@ -8,8 +8,13 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 import httpx
-from mcp import ClientSession, StdioServerParameters
-from mcp.client.stdio import stdio_client
+try:
+    from mcp import ClientSession, StdioServerParameters
+    from mcp.client.stdio import stdio_client
+except ModuleNotFoundError:
+    ClientSession = None
+    StdioServerParameters = None
+    stdio_client = None
 
 from app.core.config import Settings
 
@@ -78,12 +83,26 @@ class NotionHTTPFallback:
             return r.json()
 
 
+def mcp_package_available() -> bool:
+    return ClientSession is not None and StdioServerParameters is not None and stdio_client is not None
+
+
+def notion_transport_name() -> str:
+    return "mcp-stdio" if mcp_package_available() else "rest-fallback"
+
+
 # ─── MCP context managers ────────────────────────────────────────────────────
 
 
 @asynccontextmanager
 async def notion_mcp(settings: Settings):
     """Spin up Notion MCP stdio server and yield a ClientSession."""
+    if not settings.notion_token:
+        raise MCPClientError("NOTION_TOKEN is not configured.")
+    if not mcp_package_available():
+        log.warning("mcp package is not installed; using Notion REST fallback.")
+        yield NotionHTTPFallback(settings)
+        return
     params = StdioServerParameters(
         command=settings.notion_mcp_command,
         args=["-y", settings.notion_mcp_package],
@@ -102,6 +121,8 @@ def notion_session(settings: Settings):
 @asynccontextmanager
 async def github_mcp(settings: Settings):
     """Spin up GitHub MCP stdio server and yield a ClientSession."""
+    if not mcp_package_available():
+        raise MCPClientError("mcp package is not installed. Install project dependencies before using GitHub MCP.")
     params = StdioServerParameters(
         command=settings.notion_mcp_command,
         args=["-y", settings.github_mcp_package],

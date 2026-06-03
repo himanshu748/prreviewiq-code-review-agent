@@ -5,10 +5,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    hf_api_key: str = Field(..., alias="HF_API_KEY")
+    hf_api_key: str = Field("", alias="HF_API_KEY")
     hf_model: str = Field("Qwen/Qwen2.5-72B-Instruct", alias="HF_MODEL")
-    notion_token: str = Field(..., alias="NOTION_TOKEN")
-    notion_parent_page_id: str = Field(..., alias="NOTION_PARENT_PAGE_ID")
+    notion_token: str = Field("", alias="NOTION_TOKEN")
+    notion_parent_page_id: str = Field("", alias="NOTION_PARENT_PAGE_ID")
     github_token: str = Field("", alias="GITHUB_TOKEN")
     notion_mcp_command: str = "npx"
     notion_mcp_package: str = "@notionhq/notion-mcp-server"

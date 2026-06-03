@@ -13,6 +13,7 @@ from app.schemas.review import (
     WeeklyDigestResult,
 )
 from app.services.review import ReviewService, SetupRequiredError
+from app.services.review import parse_github_pr_url
 from app.services.state import StateStore
 
 
@@ -144,3 +145,36 @@ def test_setup_and_review_flow(tmp_path):
     assert notion.persist_calls[0][1] == "Test PR"
     assert standards_response.rules[0].times_flagged == 4
     assert digest_response.report_title == "📊 Week of 2026-03-09 Code Quality Report"
+
+
+def test_setup_requires_parent_page_when_settings_are_absent(tmp_path):
+    service = ReviewService(
+        reviewer=StubReviewer(),
+        notion_service=StubNotionService(),
+        state_store=StateStore(str(tmp_path / "state.json")),
+        notion_parent_page_id="",
+    )
+
+    with pytest.raises(RuntimeError, match="NOTION_PARENT_PAGE_ID"):
+        asyncio.run(service.setup(force=True))
+
+
+def test_parse_github_pr_url_accepts_exact_pull_url():
+    assert parse_github_pr_url("https://github.com/owner/repo/pull/123") == (
+        "owner",
+        "repo",
+        123,
+    )
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://github.com/owner/repo/issues/123",
+        "https://github.com/owner/repo/pull/not-number",
+        "https://example.com/owner/repo/pull/123",
+    ],
+)
+def test_parse_github_pr_url_rejects_invalid_urls(url):
+    with pytest.raises(ValueError):
+        parse_github_pr_url(url)

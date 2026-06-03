@@ -16,6 +16,8 @@ from app.schemas.review import (
     StandardsResponse,
     WeeklyDigestResponse,
 )
+from app.core.config import get_settings
+from app.services.mcp_client import notion_transport_name
 from app.services.review import ReviewService, SetupRequiredError
 
 router = APIRouter()
@@ -28,8 +30,14 @@ async def index() -> str:
 
 
 @router.get("/api/health")
-async def health() -> dict[str, str]:
-    return {"status": "ok"}
+async def health() -> dict[str, object]:
+    settings = get_settings()
+    return {
+        "status": "ok",
+        "notion_token": bool(settings.notion_token),
+        "parent_page_id": bool(settings.notion_parent_page_id),
+        "notion_transport": notion_transport_name(),
+    }
 
 
 @router.post("/api/setup", response_model=SetupResponse)

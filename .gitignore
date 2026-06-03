@@ -1,5 +1,6 @@
 .DS_Store
 .env
+.prreviewiq/
 .venv/
 .pytest_cache/
 __pycache__/

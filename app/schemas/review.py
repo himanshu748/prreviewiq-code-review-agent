@@ -11,20 +11,20 @@ class SetupRequest(BaseModel):
 
 
 class ReviewPRRequest(BaseModel):
-    diff: str
-    pr_title: str
-    repo: str
+    diff: str = Field(..., min_length=1, max_length=120_000)
+    pr_title: str = Field(..., min_length=1, max_length=200)
+    repo: str = Field(..., min_length=1, max_length=160)
 
 
 class ReviewGitHubPRRequest(BaseModel):
-    pr_url: str
+    pr_url: str = Field(..., min_length=1, max_length=300)
 
 
 class ReviewFileRequest(BaseModel):
-    filename: str
-    content: str
-    pr_title: str
-    repo: str
+    filename: str = Field(..., min_length=1, max_length=240)
+    content: str = Field(..., min_length=1, max_length=120_000)
+    pr_title: str = Field(..., min_length=1, max_length=200)
+    repo: str = Field(..., min_length=1, max_length=160)
 
 
 class ReviewIssue(BaseModel):

@@ -14,7 +14,6 @@ from app.schemas.review import (
     StandardsResponse,
     WeeklyDigestResponse,
 )
-from app.services.mcp_client import github_session, mcp_call
 from app.services.notion import NotionService
 from app.services.reviewer import HFReviewEngine
 from app.services.state import StateStore
@@ -22,6 +21,19 @@ from app.services.state import StateStore
 
 class SetupRequiredError(RuntimeError):
     pass
+
+
+MAX_GITHUB_PR_FILES = 20
+MAX_GITHUB_DIFF_CHARS = 120_000
+GITHUB_PR_URL_RE = re.compile(r"^https?://github\.com/([^/]+)/([^/]+)/pull/(\d+)/?$")
+
+
+def parse_github_pr_url(pr_url: str) -> tuple[str, str, int]:
+    match = GITHUB_PR_URL_RE.match(pr_url.strip())
+    if not match:
+        raise ValueError("Invalid GitHub PR URL. Expected: https://github.com/owner/repo/pull/123")
+    owner, repo, pull_number = match.group(1), match.group(2), int(match.group(3))
+    return owner, repo, pull_number
 
 
 class ReviewService:
@@ -32,7 +44,7 @@ class ReviewService:
         notion_service: NotionService,
         state_store: StateStore,
         notion_parent_page_id: str,
-        settings: Settings,
+        settings: Settings | None = None,
     ) -> None:
         self.reviewer = reviewer
         self.notion_service = notion_service
@@ -44,6 +56,7 @@ class ReviewService:
         await self.notion_service.close()
 
     async def setup(self, force: bool = False) -> SetupResponse:
+        self._require_notion_config()
         existing_state = self.state_store.load()
         if existing_state is not None and not force:
             return SetupResponse(
@@ -98,15 +111,12 @@ class ReviewService:
 
     async def review_github_pr(self, request: ReviewGitHubPRRequest) -> ReviewResponse:
         """Fetch PR diff via GitHub MCP, then review and persist to Notion."""
-        if not self.settings.github_token:
+        if self.settings is None or not self.settings.github_token:
             raise RuntimeError("GITHUB_TOKEN not configured. Set it in .env to use GitHub MCP.")
         state = self._require_state()
+        owner, repo, pull_number = parse_github_pr_url(request.pr_url)
 
-        # Parse PR URL: https://github.com/{owner}/{repo}/pull/{number}
-        m = re.match(r"https?://github\.com/([^/]+)/([^/]+)/pull/(\d+)", request.pr_url.strip())
-        if not m:
-            raise ValueError(f"Invalid GitHub PR URL. Expected: https://github.com/owner/repo/pull/123")
-        owner, repo, pull_number = m.group(1), m.group(2), int(m.group(3))
+        from app.services.mcp_client import github_session, mcp_call
 
         # Fetch PR info and files via GitHub MCP
         async with github_session(self.settings) as gh:
@@ -122,11 +132,14 @@ class ReviewService:
 
         # Build a combined diff from file patches
         diff_parts = []
-        for f in pr_files if isinstance(pr_files, list) else pr_files.get("files", pr_files.get("results", [])):
+        file_items = pr_files if isinstance(pr_files, list) else pr_files.get("files", pr_files.get("results", []))
+        for f in file_items[:MAX_GITHUB_PR_FILES]:
             patch = f.get("patch", "")
             if patch:
                 diff_parts.append(f"--- a/{f.get('filename', '?')}\n+++ b/{f.get('filename', '?')}\n{patch}")
         combined_diff = "\n".join(diff_parts) if diff_parts else "No diff available."
+        if len(combined_diff) > MAX_GITHUB_DIFF_CHARS:
+            combined_diff = combined_diff[:MAX_GITHUB_DIFF_CHARS] + "\n... [Diff truncated]"
 
         # Review with HF
         analysis = await self.reviewer.review_diff(
@@ -170,3 +183,12 @@ class ReviewService:
         if state is None:
             raise SetupRequiredError("Run POST /api/setup before using review or digest endpoints.")
         return state
+
+    def _require_notion_config(self) -> None:
+        if self.settings is not None:
+            if not self.settings.notion_token:
+                raise RuntimeError("NOTION_TOKEN not configured. Set it in .env before running setup.")
+            if not self.settings.notion_parent_page_id:
+                raise RuntimeError("NOTION_PARENT_PAGE_ID not configured. Set it in .env before running setup.")
+        elif not self.notion_parent_page_id:
+            raise RuntimeError("NOTION_PARENT_PAGE_ID not configured. Set it in .env before running setup.")

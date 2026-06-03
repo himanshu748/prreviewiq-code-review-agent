@@ -32,6 +32,9 @@ class HFService:
         temperature: float = 0.1,
         max_tokens: int = 4096,
     ) -> str:
+        if not self.api_key:
+            raise HFError("HF_API_KEY not configured. Set it in .env before running reviews.")
+
         full_messages: list[dict[str, str]] = [
             {"role": "system", "content": system_prompt},
             *messages,
