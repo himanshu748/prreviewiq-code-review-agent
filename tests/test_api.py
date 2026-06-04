@@ -1,9 +1,20 @@
 from fastapi.testclient import TestClient
 
+from app.api import routes
+from app.core.config import Settings
 from app.main import app
 
 
-def test_health_and_static_index_work_without_env_tokens():
+def test_health_and_static_index_work_without_env_tokens(monkeypatch):
+    monkeypatch.setattr(
+        routes,
+        "get_settings",
+        lambda: Settings(
+            _env_file=None,
+            notion_token="",
+            notion_parent_page_id="",
+        ),
+    )
     client = TestClient(app)
 
     health = client.get("/api/health")
