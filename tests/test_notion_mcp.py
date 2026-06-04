@@ -147,6 +147,27 @@ async def test_notion_mcp_requires_token():
             pass
 
 
+def test_parse_mcp_tool_result_rejects_invalid_json():
+    result = SimpleNamespace(content=[SimpleNamespace(text="not json")])
+
+    with pytest.raises(mcp_client.MCPClientError, match="invalid JSON"):
+        mcp_client.parse_mcp_tool_result(result, "API-get-self")
+
+
+def test_parse_mcp_tool_result_rejects_non_object_payload():
+    result = SimpleNamespace(content=[SimpleNamespace(text="[]")])
+
+    with pytest.raises(mcp_client.MCPClientError, match="unexpected payload shape"):
+        mcp_client.parse_mcp_tool_result(result, "API-get-self")
+
+
+def test_parse_mcp_tool_result_rejects_non_text_content():
+    result = SimpleNamespace(content=[SimpleNamespace(data={"id": "prreviewiq"})])
+
+    with pytest.raises(mcp_client.MCPClientError, match="non-text content"):
+        mcp_client.parse_mcp_tool_result(result, "API-get-self")
+
+
 @pytest.mark.asyncio
 async def test_rest_fallback_does_not_mutate_tool_arguments(monkeypatch):
     FakeAsyncClient.instances = []

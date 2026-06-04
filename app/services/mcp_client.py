@@ -116,6 +116,22 @@ def notion_transport_name() -> str:
     return "mcp-stdio" if mcp_package_available() else "rest-fallback"
 
 
+def parse_mcp_tool_result(result: Any, tool: str) -> dict[str, Any]:
+    content = getattr(result, "content", None) or []
+    if not content:
+        return {}
+    text = getattr(content[0], "text", None)
+    if text is None:
+        raise MCPClientError(f"MCP returned non-text content for {tool}.")
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise MCPClientError(f"MCP returned invalid JSON for {tool}.") from exc
+    if not isinstance(payload, dict):
+        raise MCPClientError(f"MCP returned an unexpected payload shape for {tool}.")
+    return payload
+
+
 # ─── MCP context managers ────────────────────────────────────────────────────
 
 
@@ -172,8 +188,7 @@ async def mcp_call(session: Any, tool: str, args: dict[str, Any]) -> dict[str, A
         return await session.call_tool(tool, args)
     try:
         result = await session.call_tool(tool, args)
-        text = result.content[0].text if result.content else "{}"
-        return json.loads(text)
+        return parse_mcp_tool_result(result, tool)
     except Exception as exc:
         raise MCPClientError(f"MCP tool {tool} failed: {exc}") from exc
 
