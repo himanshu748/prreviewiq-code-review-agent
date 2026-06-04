@@ -6,6 +6,11 @@ from app.schemas.review import CodeReviewAnalysis
 from app.services.hf import HFService
 from app.services.parsing import extract_json_payload
 
+MAX_REPO_CHARS = 160
+MAX_TITLE_CHARS = 200
+MAX_FILENAME_CHARS = 240
+MAX_REVIEW_TEXT_CHARS = 120_000
+
 
 class HFReviewEngine:
     def __init__(self, hf: HFService) -> None:
@@ -14,9 +19,9 @@ class HFReviewEngine:
     async def review_diff(self, *, diff: str, pr_title: str, repo: str) -> CodeReviewAnalysis:
         prompt = {
             "task": "Review a raw git diff for code issues.",
-            "pr_title": pr_title,
-            "repo": repo,
-            "diff": diff,
+            "pr_title": _bounded_text(pr_title, MAX_TITLE_CHARS),
+            "repo": _bounded_text(repo, MAX_REPO_CHARS),
+            "diff": _bounded_text(diff, MAX_REVIEW_TEXT_CHARS),
         }
         return await self._review(prompt)
 
@@ -30,10 +35,10 @@ class HFReviewEngine:
     ) -> CodeReviewAnalysis:
         prompt = {
             "task": "Review a single file for code issues.",
-            "filename": filename,
-            "pr_title": pr_title,
-            "repo": repo,
-            "content": content,
+            "filename": _bounded_text(filename, MAX_FILENAME_CHARS),
+            "pr_title": _bounded_text(pr_title, MAX_TITLE_CHARS),
+            "repo": _bounded_text(repo, MAX_REPO_CHARS),
+            "content": _bounded_text(content, MAX_REVIEW_TEXT_CHARS),
         }
         return await self._review(prompt)
 
@@ -86,3 +91,7 @@ Rules:
         )
         parsed = extract_json_payload(response_text)
         return CodeReviewAnalysis.model_validate(parsed)
+
+
+def _bounded_text(value: str, max_chars: int) -> str:
+    return str(value or "")[:max_chars]

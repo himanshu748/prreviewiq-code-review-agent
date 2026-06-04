@@ -47,7 +47,7 @@ class HFService:
                 max_tokens=max_tokens,
             )
         except Exception as exc:
-            raise HFError(f"HuggingFace request failed: {exc}") from exc
+            raise HFError("HuggingFace request failed.") from exc
 
         content = response.choices[0].message.content
         if not content or not content.strip():
