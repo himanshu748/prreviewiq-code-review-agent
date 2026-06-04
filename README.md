@@ -13,7 +13,7 @@ PRReviewIQ is a local FastAPI app plus Python CLI that reviews pull request diff
 
 ## Important Notion MCP note
 
-This implementation uses the official `@notionhq/notion-mcp-server` package locally via `npx`, with `NOTION_TOKEN` passed to the MCP server, so all Notion writes still happen through MCP and never through direct REST calls from this app.
+This implementation uses the official `@notionhq/notion-mcp-server` package locally via `npx`, with `NOTION_TOKEN` passed to the MCP server. MCP stdio is the primary path; direct REST is retained only as a constrained fallback for supported Notion operations and for database endpoints that the current MCP server does not expose reliably.
 
 ## Prerequisites
 
@@ -21,7 +21,7 @@ This implementation uses the official `@notionhq/notion-mcp-server` package loca
 - Node.js and `npx`
 - A Notion integration token in `NOTION_TOKEN`
 - A parent Notion page ID in `NOTION_PARENT_PAGE_ID`
-- A HuggingFace API key in `HF_API_KEY`
+- A HuggingFace API key in `HF_API_KEY` or a local `HF_TOKEN` fallback
 
 ## Run locally
 
@@ -46,7 +46,7 @@ python -m pytest
 python -m compileall app tests review.py
 ```
 
-The app can serve health and static UI routes without tokens. Review/setup routes fail with explicit configuration errors until `HF_API_KEY`, `NOTION_TOKEN`, `NOTION_PARENT_PAGE_ID`, and optional `GITHUB_TOKEN` are configured. `/api/health` reports `notion_transport` so MCP stdio and REST fallback are not confused.
+The app can serve health and static UI routes without tokens. Review/setup routes fail with explicit configuration errors until `HF_API_KEY` or `HF_TOKEN`, `NOTION_TOKEN`, `NOTION_PARENT_PAGE_ID`, and optional `GITHUB_TOKEN` are configured. `/api/health` reports `notion_transport` so MCP stdio and REST fallback are not confused. If `NOTION_TOKEN` is not loaded, live Notion setup/review/digest routes cannot be tested; REST fallback errors are sanitized before surfacing.
 
 ## Local state and secrets
 

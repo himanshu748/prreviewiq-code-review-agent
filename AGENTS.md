@@ -16,4 +16,6 @@
 - Do not commit Notion state, tokens, page IDs, `.env`, caches, or generated outputs.
 - Keep setup/review endpoints explicit about missing `HF_API_KEY`, `NOTION_TOKEN`, `NOTION_PARENT_PAGE_ID`, or `GITHUB_TOKEN`.
 - Bound raw diff/file inputs before sending them to Hugging Face or Notion.
+- `HF_TOKEN` may be used as a local fallback alias for `HF_API_KEY`; never commit real provider tokens.
+- Notion REST fallback errors should stay sanitized and raise `MCPClientError` instead of returning API error dicts as app data.
 - Keep direct Notion REST fallback documented as a fallback; primary product copy should still describe the MCP path.

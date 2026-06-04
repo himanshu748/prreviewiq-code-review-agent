@@ -44,6 +44,30 @@ class NotionHTTPFallback:
             "Content-Type": "application/json",
         }
 
+    @staticmethod
+    def _required(payload: dict[str, Any], key: str, tool: str) -> Any:
+        try:
+            return payload.pop(key)
+        except KeyError as exc:
+            raise MCPClientError(
+                f"Notion REST fallback missing required argument '{key}' for {tool}."
+            ) from exc
+
+    @staticmethod
+    def _json_response(response: httpx.Response) -> dict[str, Any]:
+        try:
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            status = exc.response.status_code
+            raise MCPClientError(f"Notion REST request failed with HTTP {status}.") from exc
+        try:
+            payload = response.json()
+        except ValueError as exc:
+            raise MCPClientError("Notion REST returned invalid JSON.") from exc
+        if not isinstance(payload, dict):
+            raise MCPClientError("Notion REST returned an unexpected payload shape.")
+        return payload
+
     async def call_tool(self, tool: str, args: dict[str, Any]) -> dict[str, Any]:
         payload = dict(args)
         async with httpx.AsyncClient(timeout=30) as c:
@@ -54,14 +78,14 @@ class NotionHTTPFallback:
             elif tool == "API-post-database":
                 r = await c.post(f"{NOTION_API}/databases", headers=self._headers(), json=payload)
             elif tool == "API-post-database-query":
-                db_id = payload.pop("database_id")
+                db_id = self._required(payload, "database_id", tool)
                 r = await c.post(
                     f"{NOTION_API}/databases/{db_id}/query",
                     headers=self._headers(),
                     json=payload,
                 )
             elif tool == "API-get-block-children":
-                bid = payload.pop("block_id")
+                bid = self._required(payload, "block_id", tool)
                 r = await c.get(
                     f"{NOTION_API}/blocks/{bid}/children",
                     headers=self._headers(),
@@ -70,18 +94,18 @@ class NotionHTTPFallback:
             elif tool == "API-get-self":
                 r = await c.get(f"{NOTION_API}/users/me", headers=self._headers())
             elif tool == "API-patch-page":
-                pid = payload.pop("page_id")
+                pid = self._required(payload, "page_id", tool)
                 r = await c.patch(
                     f"{NOTION_API}/pages/{pid}",
                     headers=self._headers(),
                     json=payload,
                 )
             elif tool == "API-retrieve-a-page":
-                pid = payload.pop("page_id")
+                pid = self._required(payload, "page_id", tool)
                 r = await c.get(f"{NOTION_API}/pages/{pid}", headers=self._headers())
             else:
-                return {"error": f"Unknown tool: {tool}"}
-            return r.json()
+                raise MCPClientError(f"Unknown Notion tool: {tool}.")
+            return self._json_response(r)
 
 
 def mcp_package_available() -> bool:
@@ -240,10 +264,7 @@ async def mcp_create_database(
     }
     async with httpx.AsyncClient(timeout=30) as c:
         r = await c.post(f"{NOTION_API}/databases", headers=headers, json=body)
-        result = r.json()
-    if r.status_code >= 400:
-        raise MCPClientError(f"Notion database creation failed: {result.get('message', str(result)[:200])}")
-    return result
+        return NotionHTTPFallback._json_response(r)
 
 
 async def mcp_search(session: Any, query: str = "") -> list[dict[str, Any]]:
@@ -289,7 +310,7 @@ async def mcp_query_database(
             f"{NOTION_API}/databases/{database_id}/query",
             headers=headers, json=body,
         )
-        result = r.json()
+        result = NotionHTTPFallback._json_response(r)
     return result.get("results", [])
 
 
